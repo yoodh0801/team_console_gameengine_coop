@@ -6,12 +6,20 @@ namespace ConsoleEngine;
 public abstract class GameBase
 {
     private readonly Screen _screen;
+    private readonly Audio _audio;
     private readonly int _frameMs;
     private bool _quitRequested;
 
     protected GameBase(int width, int height, int framesPerSecond = 20)
     {
         _screen = new Screen(width, height);
+        _audio= new Audio();
+
+        WaveTestGenerator.CreateBeepWav("sfx_jump.wav", frequencyHz: 659.25, durationSeconds: 0.15);
+        WaveTestGenerator.CreateBeepWav("bgm_loop.wav", frequencyHz: 261.63, durationSeconds: 1.0, amplitude: 0.15);
+
+        AudioManager.Register(_audio);
+
         _frameMs = 1000 / framesPerSecond;
     }
 

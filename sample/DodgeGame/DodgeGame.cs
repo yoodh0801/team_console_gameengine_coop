@@ -15,19 +15,40 @@ class DodgeGame : GameBase
     private float _time;
     private GameState _state = GameState.Playing;
 
-    public DodgeGame() : base(Width, Height) { }
+    public DodgeGame() : base(Width, Height) 
+    {
+        // 1. 효과음 로드
+        AudioManager.LoadSfx("jump", "sfx_jump.wav");
+
+        // 2. BGM 재생 (loop: true면 반복 재생, false면 1회 재생)
+        AudioManager.PlayBgm("bgm_loop.wav", loop: true);
+    }
 
     protected override void Input(ConsoleKey key)
     {
-        if (key == ConsoleKey.Escape) Quit();            // 규칙 6
+        if (key == ConsoleKey.Escape)
+        {
+            AudioManager.StopBgm();
+            AudioManager.StopAll();
+            AudioManager.Shutdown();
+
+            Quit();            // 규칙 6
+        }
         if (_state != GameState.Playing)
         {
             if (key == ConsoleKey.R) Restart();
             return;
         }
-        if (key == ConsoleKey.LeftArrow && _playerX > 0) _playerX--;
+        if (key == ConsoleKey.LeftArrow && _playerX > 0)
+        {
+            _playerX--;
+            AudioManager.PlaySfx("jump");
+        }
         if (key == ConsoleKey.RightArrow && _playerX < Width - 1)
+        {
             _playerX++;                                   // 규칙 2
+            AudioManager.PlaySfx("jump");
+        }
     }
 
     private void Restart()
