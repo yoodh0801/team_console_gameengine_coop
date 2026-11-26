@@ -27,6 +27,7 @@ public class FallingObject
 {
     public ObstacleKind Kind { get; set; }
     public string Label { get; set; } = string.Empty;
+    public ConsoleColor Color { get; set; } = ConsoleColor.White;
     public int X { get; set; }
     public float Y { get; set; }
     public float SpeedY { get; set; } // 칸/초
@@ -35,10 +36,12 @@ public class FallingObject
 
 public class Game : GameBase
 {
-    private const int ScreenWidth = 80;
-    private const int ScreenHeight = 40;
-    private const int PlayerY = 38;
-    private const int FloorY = 39;
+    // Windows 콘솔 창(80x30 기준)에서 전각 문자/개행으로 인한 줄바꿈(Wrap)과 스크롤 깜빡임을 막기 위해
+    // 실제 렌더링 버퍼는 79x29로 설정합니다.
+    private const int ScreenWidth = 79;
+    private const int ScreenHeight = 29;
+    private const int PlayerY = 27;
+    private const int FloorY = 28;
     private const int SpawnStartY = 3;
 
     private readonly Random _rng = new();
@@ -65,8 +68,37 @@ public class Game : GameBase
 
     public Game() : base(ScreenWidth, ScreenHeight, framesPerSecond: 20)
     {
+        ConfigureWindowBuffer();
         LoadAudioAssets();
         ResetGame();
+    }
+
+    private static void ConfigureWindowBuffer()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        try
+        {
+            Console.CursorVisible = false;
+            int targetW = 80;
+            int targetH = ScreenHeight + 2; // 마지막 줄 '\n' 출력 시 스크롤 방지용 여유 2줄
+
+            int maxW = Math.Max(targetW, Console.LargestWindowWidth);
+            int maxH = Math.Max(targetH, Console.LargestWindowHeight);
+            targetW = Math.Min(targetW, maxW);
+            targetH = Math.Min(targetH, maxH);
+
+            if (Console.WindowWidth > targetW || Console.WindowHeight > targetH)
+            {
+                Console.SetWindowSize(Math.Min(Console.WindowWidth, targetW), Math.Min(Console.WindowHeight, targetH));
+            }
+            Console.SetBufferSize(targetW, targetH);
+            Console.SetWindowSize(targetW, targetH);
+        }
+        catch
+        {
+            // 터미널 환경 제약 시 무시
+        }
     }
 
     private void LoadAudioAssets()
@@ -144,9 +176,9 @@ public class Game : GameBase
 
             _playerX += direction * moveStep;
 
-            // 플레이어 'ㅁ'(가로 2칸 폭)가 화면 경계(0 ~ 78)를 벗어나지 않도록 클램프
+            // 플레이어 'ㅁ'(가로 2칸 폭)가 화면 경계(0 ~ 76)를 벗어나지 않도록 클램프
             if (_playerX < 0) _playerX = 0;
-            if (_playerX > ScreenWidth - 2) _playerX = ScreenWidth - 2;
+            if (_playerX > ScreenWidth - 3) _playerX = ScreenWidth - 3;
         }
     }
 
@@ -196,7 +228,7 @@ public class Game : GameBase
 
             int objRow = (int)MathF.Floor(obj.Y);
 
-            // 플레이어(Y=58, 폭 2칸: _playerX ~ _playerX+1)와 오브젝트([X], 폭 3칸: obj.X ~ obj.X+2) 충돌 판정
+            // 플레이어(폭 2칸)와 오브젝트([X], 폭 3칸) 충돌 판정
             if (objRow == PlayerY && CheckHorizontalOverlap(_playerX, 2, obj.X, 3))
             {
                 ApplyObjectEffect(obj);
@@ -233,57 +265,66 @@ public class Game : GameBase
         int roll = _rng.Next(100);
         ObstacleKind kind;
         string label;
+        ConsoleColor color;
         bool isBuff = false;
 
         if (roll < 35)
         {
             kind = ObstacleKind.NormalA;
             label = "[A]";
+            color = ConsoleColor.White;
         }
         else if (roll < 43)
         {
             kind = ObstacleKind.StunB;
             label = "[B]";
+            color = ConsoleColor.Yellow;
         }
         else if (roll < 50)
         {
             kind = ObstacleKind.DarkC;
             label = "[C]";
+            color = ConsoleColor.DarkGray;
         }
         else if (roll < 60)
         {
             kind = ObstacleKind.SlowD;
             label = "[D]";
+            color = ConsoleColor.DarkCyan;
         }
         else if (roll < 68)
         {
             kind = ObstacleKind.ConfuseE;
             label = "[E]";
+            color = ConsoleColor.Green;
         }
         else if (roll < 83)
         {
             kind = ObstacleKind.FastF;
             label = "[F]";
+            color = ConsoleColor.White;
         }
         else if (roll < 88)
         {
             kind = ObstacleKind.RandomQ;
             label = "[?]";
+            color = ConsoleColor.DarkMagenta;
         }
         else if (roll < 95)
         {
             kind = ObstacleKind.InvincZ;
             label = "[Z]";
+            color = ConsoleColor.Blue;
             isBuff = true;
         }
         else
         {
             kind = ObstacleKind.HealX;
             label = "[X]";
+            color = ConsoleColor.Red;
             isBuff = true;
         }
 
-        // 스폰 위치 Y=3 부터 바닥 Y=59 까지의 거리: 56칸
         float distance = FloorY - SpawnStartY;
         float speedY = distance / _fallDuration;
 
@@ -293,13 +334,14 @@ public class Game : GameBase
             speedY *= 1.5f;
         }
 
-        // 오브젝트 가로 폭이 3칸("[A]")이므로 X는 0 ~ 77 범위
-        int spawnX = _rng.Next(0, ScreenWidth - 2);
+        // 오브젝트 가로 폭이 3칸("[A]")이므로 오른쪽 끝 줄바꿈 방지를 위해 X는 0 ~ 75 범위
+        int spawnX = _rng.Next(0, ScreenWidth - 3);
 
         _objects.Add(new FallingObject
         {
             Kind = kind,
             Label = label,
+            Color = color,
             X = spawnX,
             Y = SpawnStartY,
             SpeedY = speedY,
@@ -393,6 +435,8 @@ public class Game : GameBase
 
     protected override void Render(Screen screen)
     {
+        Console.CursorVisible = false;
+
         if (_state == GameState.GameOver)
         {
             RenderGameOver(screen);
@@ -405,37 +449,36 @@ public class Game : GameBase
             return;
         }
 
-        // 1. 떨어지는 오브젝트 먼저 렌더링
+        // 1. 떨어지는 오브젝트 먼저 렌더링 (기획서 지정 색상 적용)
         foreach (var obj in _objects)
         {
             int drawY = (int)MathF.Floor(obj.Y);
             if (drawY >= 0 && drawY < FloorY)
             {
-                screen.DrawText(obj.X, drawY, obj.Label);
+                screen.DrawText(obj.X, drawY, obj.Label, obj.Color);
             }
         }
 
-        // 2. 시간 경과에 따른 중앙 가로 시야 차단 층 덮어그리기 (장애물 뒤에 그려 가림 처리)
+        // 2. 시간 경과에 따른 중앙 가로 시야 차단 층 덮어그리기 (ASCII '#' 문자로 깨짐 방지)
         RenderBlindLayer(screen);
 
         // 3. 플레이어 캐릭터 렌더링 (무적 상태일 때는 깜빡거림)
         bool showPlayer = true;
         if (_invincibleTimer > 0f)
         {
-            // 0.1초 주기로 깜빡임
             showPlayer = ((int)(_invincibleTimer * 20)) % 2 == 0;
         }
 
         if (showPlayer)
         {
-            // Screen.DrawText 주석(한글 2칸 차지)을 고려하여 1칸씩 기록 후 공백 처리하거나 DrawText 사용
-            screen.Draw(_playerX, PlayerY, 'ㅁ');
+            ConsoleColor playerColor = _invincibleTimer > 0f ? ConsoleColor.Cyan : ConsoleColor.White;
+            screen.Draw(_playerX, PlayerY, 'ㅁ', playerColor);
         }
 
-        // 4. 바닥선 렌더링 (Y=59)
-        for (int x = 0; x < ScreenWidth; x++)
+        // 4. 바닥선 렌더링 (한글 2칸 전각 문자 밀림을 감안해 78칸까지 출력)
+        for (int x = 0; x < ScreenWidth - 1; x++)
         {
-            screen.Draw(x, FloorY, '=');
+            screen.Draw(x, FloorY, '=', ConsoleColor.DarkGray);
         }
 
         // 5. 상단 HUD 렌더링 (우측 상단)
@@ -445,73 +488,78 @@ public class Game : GameBase
     private void RenderBlindLayer(Screen screen)
     {
         // 0 ~ 29초: 없음
-        // 30초 경과 시: 1줄 (Y=30)
+        // 30초 경과 시: 화면 정중앙(Y=15)에 1줄 생성
         // 이후 10초 추가 경과 시마다 1줄씩 위쪽으로 확장, 최대 5줄 제한
         if (_elapsedTime < 30f)
             return;
 
         int extraLines = (int)((_elapsedTime - 30f) / 10f);
         int totalLines = Math.Min(5, 1 + extraLines);
+        int centerRow = ScreenHeight / 2;
 
         for (int i = 0; i < totalLines; i++)
         {
-            int y = 30 - i;
-            if (y < 0 || y >= ScreenHeight) continue;
+            int y = centerRow - i;
+            if (y < SpawnStartY || y >= PlayerY) continue;
 
             for (int x = 0; x < ScreenWidth; x++)
             {
-                screen.Draw(x, y, '▒');
+                screen.Draw(x, y, '#', ConsoleColor.DarkGray);
             }
         }
     }
 
     private void RenderHud(Screen screen)
     {
-        // 생명 표시: 하트 모양('♥')으로 남은 개수만큼 표시 (예: "♥ ♥ ♥ ♥ ♥")
+        // 생명 표시: 하트 모양('♥')은 전각(2칸)이므로 5개 + 공백 4개 = 실제 콘솔 14칸 차지
+        // X=63부터 그리면 63 + 14 = 77칸으로 오른쪽 끝에 걸리지 않고 한 줄에 깔끔하게 출력됨
         string hearts = string.Empty;
         for (int i = 0; i < _hp; i++)
         {
             hearts += (i > 0 ? " ♥" : "♥");
         }
 
-        // 우측 상단 정렬 (X=68 기준)
-        screen.DrawText(68, 1, hearts);
+        screen.DrawText(63, 1, hearts, ConsoleColor.Red);
 
-        // 생존 시간: 시작 시 "00초", 60초 초과 시 "1:01" 형태
+        // 생존 시간: 시작 시 "00초"(숫자 2칸 + '초' 2칸 = 실제 4칸), 60초 초과 시 "1:01" 형태
         int totalSeconds = (int)_elapsedTime;
         string timeText;
+        int visualWidth;
+
         if (totalSeconds <= 60)
         {
             timeText = $"{totalSeconds:D2}초";
+            visualWidth = 4;
         }
         else
         {
             int minutes = totalSeconds / 60;
             int seconds = totalSeconds % 60;
             timeText = $"{minutes}:{seconds:D2}";
+            visualWidth = timeText.Length;
         }
 
-        // 우측 상단 생명 표시 바로 아래에 배치
-        int timeX = ScreenWidth - 4 - timeText.Length;
-        screen.DrawText(timeX, 2, timeText);
+        int timeX = 77 - visualWidth;
+        screen.DrawText(timeX, 2, timeText, ConsoleColor.White);
     }
 
     private void RenderGameOver(Screen screen)
     {
+        // ASCII 문자로 구성하여 콘솔 환경에서도 '?' 깨짐 없이 선명하게 출력
         string[] banner =
         {
-            "  ████    ███   █   █  █████       ███   █   █  █████  ████  ",
-            " █       █   █  ██ ██  █          █   █  █   █  █      █   █ ",
-            " █  ███  █████  █ █ █  ████       █   █  █   █  ████   ████  ",
-            " █    █  █   █  █   █  █          █   █   █ █   █      █   █ ",
-            "  ████   █   █  █   █  █████       ███     █    █████  █   █ "
+            "  ####    ###   #   #  #####       ###   #   #  #####  ####  ",
+            " #       #   #  ## ##  #          #   #  #   #  #      #   # ",
+            " #  ###  #####  # # #  ####       #   #  #   #  ####   ####  ",
+            " #    #  #   #  #   #  #          #   #   # #   #      #   # ",
+            "  ####   #   #  #   #  #####       ###     #    #####  #   # "
         };
 
-        int bannerStartY = 14;
+        int bannerStartY = 5;
         for (int i = 0; i < banner.Length; i++)
         {
             int x = (ScreenWidth - banner[i].Length) / 2;
-            screen.DrawText(x, bannerStartY + i, banner[i]);
+            screen.DrawText(x, bannerStartY + i, banner[i], ConsoleColor.Red);
         }
 
         // 최종 생존 시간 요약 표시
@@ -519,19 +567,21 @@ public class Game : GameBase
         string recordText = totalSeconds <= 60
             ? $"SURVIVAL TIME : {totalSeconds:D2}s"
             : $"SURVIVAL TIME : {totalSeconds / 60}:{totalSeconds % 60:D2}";
-        screen.DrawText((ScreenWidth - recordText.Length) / 2, 23, recordText);
+        screen.DrawText((ScreenWidth - recordText.Length) / 2, 13, recordText, ConsoleColor.Yellow);
 
-        // 재시작 안내 박스
-        string boxTop = "╔══════════════════════════════════════════════════╗";
-        string boxEmpty = "║                                                  ║";
-        string boxPrompt = "║ p r e s s  ' R '   다 시  시 작 하 시 겠 습 니 까║";
-        string boxBottom = "╚══════════════════════════════════════════════════╝";
+        // 재시작 안내 박스 (ASCII 테두리 '+' '-' '|' 사용 및 한글 10글자 2칸 폭 정밀 보정)
+        // 위/아래/빈줄 시각 폭 = 54칸 ('+' + '-'*52 + '+')
+        // 가운데 줄 시각 폭 = '|' + 공백 4칸 + "press 'R' "(10) + "다시 시작하시겠습니까?"(한글10*2 + 공백1 + '?'1 = 22) + 공백 4칸 + '|' = 54칸
+        string boxTop = "+----------------------------------------------------+";
+        string boxEmpty = "|                                                    |";
+        string boxPrompt = "|    press 'R'  다시 시작하시겠습니까?    |";
+        string boxBottom = "+----------------------------------------------------+";
 
         int boxX = (ScreenWidth - boxTop.Length) / 2;
-        screen.DrawText(boxX, 27, boxTop);
-        screen.DrawText(boxX, 28, boxEmpty);
-        screen.DrawText(boxX, 29, boxPrompt);
-        screen.DrawText(boxX, 30, boxEmpty);
-        screen.DrawText(boxX, 31, boxBottom);
+        screen.DrawText(boxX, 17, boxTop, ConsoleColor.White);
+        screen.DrawText(boxX, 18, boxEmpty, ConsoleColor.White);
+        screen.DrawText(boxX, 19, boxPrompt, ConsoleColor.White);
+        screen.DrawText(boxX, 20, boxEmpty, ConsoleColor.White);
+        screen.DrawText(boxX, 21, boxBottom, ConsoleColor.White);
     }
 }
