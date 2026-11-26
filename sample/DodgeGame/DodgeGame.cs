@@ -95,5 +95,7 @@ class DodgeGame : GameBase
             screen.DrawText(5, 9, "GAME OVER - R: retry");
         if (_state == GameState.Clear)
             screen.DrawText(6, 9, "CLEAR! - R: retry");
+
+        screen.DrawText(7, 9, "■", ConsoleColor.Yellow, ConsoleColor.Yellow);
     }
 }
